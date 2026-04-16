@@ -13,8 +13,12 @@ class Event {
 
   factory Event.fromJson(Map<String, dynamic> json) {
     String? imageUrl;
-    if (json['images'] != null && (json['images'] as List).isNotEmpty) {
-      imageUrl = json['images'][0]['url'];
+    if (json['images'] != null) {
+      final images = json['images'] as List;
+      imageUrl = images.firstWhere(
+        (img) => img['width'] > 500,
+        orElse: () => images[0],
+      )['url'];
     }
 
     return Event(

@@ -1,36 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../models/event_model.dart';
-import '../services/api_service.dart';
+import '../bloc/api_bloc.dart';
+import '../bloc/api_event.dart';
+import '../bloc/api_state.dart';
 import '../widgets/event_card.dart';
 
-class EventsScreen extends StatefulWidget {
-  const EventsScreen({super.key});
+class EventsScreen extends StatelessWidget {
+  EventsScreen({super.key});
 
-  @override
-  State<EventsScreen> createState() => _EventsScreenState();
-}
-
-class _EventsScreenState extends State<EventsScreen> {
-  late Future<List<Event>> _eventsFuture;
-  final ApiService apiService = ApiService(
-    apiKey: dotenv.env['TICKETMASTER_API_KEY'] ?? '',
-  );
   final TextEditingController _cityController = TextEditingController();
-  String city = 'New York';
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchEvents();
-  }
-
-  void _fetchEvents() {
-    setState(() {
-      _eventsFuture = apiService.fetchEvents(city: city);
-    });
-  }
+  final String defaultCity = 'New York';
 
   @override
   Widget build(BuildContext context) {
@@ -49,8 +29,10 @@ class _EventsScreenState extends State<EventsScreen> {
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.send),
                   onPressed: () {
-                    city = _cityController.text.trim();
-                    _fetchEvents();
+                    final city = _cityController.text.trim();
+
+                    // instead _fetchEvents()
+                    context.read<ApiBloc>().add(FetchEvents(city: city));
                   },
                 ),
                 filled: true,
@@ -63,12 +45,13 @@ class _EventsScreenState extends State<EventsScreen> {
           ),
         ),
       ),
-      body: FutureBuilder<List<Event>>(
-        future: _eventsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+
+      //instead FutureBuilder
+      body: BlocBuilder<ApiBloc, ApiState>(
+        builder: (context, state) {
+          if (state is ApiLoading) {
             return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
+          } else if (state is ApiError) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -76,17 +59,32 @@ class _EventsScreenState extends State<EventsScreen> {
                   const Text('Error loading events'),
                   const SizedBox(height: 10),
                   ElevatedButton(
-                    onPressed: _fetchEvents,
+                    onPressed: () {
+                      context.read<ApiBloc>().add(
+                        FetchEvents(city: defaultCity),
+                      );
+                    },
                     child: const Text('Retry'),
                   ),
                 ],
               ),
             );
-          } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            final events = snapshot.data!;
+          } else if (state is ApiLoaded) {
+            final events = state.events;
+
+            if (events.isEmpty) {
+              return const Center(child: Text('No events found'));
+            }
+
             return RefreshIndicator(
               onRefresh: () async {
-                _fetchEvents();
+                context.read<ApiBloc>().add(
+                  FetchEvents(
+                    city: _cityController.text.trim().isEmpty
+                        ? defaultCity
+                        : _cityController.text.trim(),
+                  ),
+                );
               },
               child: ListView.builder(
                 itemCount: events.length,
@@ -95,9 +93,9 @@ class _EventsScreenState extends State<EventsScreen> {
                 },
               ),
             );
-          } else {
-            return const Center(child: Text('No events found'));
           }
+
+          return const SizedBox();
         },
       ),
     );

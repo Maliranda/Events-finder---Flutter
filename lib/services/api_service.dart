@@ -21,7 +21,7 @@ class ApiService {
       if (eventsJson == null) return [];
       return eventsJson.map((e) => Event.fromJson(e)).toList();
     } else {
-      throw Exception('Failed to load events');
+      throw Exception('Failed to load events: ${response.statusCode}');
     }
   }
 }
